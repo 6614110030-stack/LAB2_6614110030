@@ -102,21 +102,51 @@ class TaskStorage {
   Future<void> saveTasksOrThrow(List<Task> tasks) async {
     try {
       final file = File(filePath);
-      final jsonList = tasks
-          .map(
-            (task) => {
-              'id': task.id,
-              'title': task.title,
-              'description': task.description,
-              'dueDate': task.dueDate?.toIso8601String(),
-              'isCompleted': task.isCompleted,
-            },
-          )
-          .toList();
 
-      final jsonString = JsonEncoder.withIndent('  ').convert(jsonList);
+      // If file exists, read existing tasks and merge to preserve old data
+      Map<String, Map<String, Object?>> existingMap = {};
+      if (await file.exists()) {
+        try {
+          final existingString = await file.readAsString();
+          final existingJson = jsonDecode(existingString) as List;
+          for (var e in existingJson) {
+            final id = e['id'] as String?;
+            if (id != null) {
+              existingMap[id] = Map<String, Object?>.from(e as Map);
+            }
+          }
+        } catch (_) {
+          // If existing file is corrupt, we will overwrite but notify
+          print('Warning: existing file is not valid JSON, it will be replaced');
+          existingMap = {};
+        }
+      }
+
+      // Merge tasks: keep existing tasks that are not in incoming list
+      final duplicates = <String>[];
+      for (var task in tasks) {
+        final jsonObj = {
+          'id': task.id,
+          'title': task.title,
+          'description': task.description,
+          'dueDate': task.dueDate?.toIso8601String(),
+          'isCompleted': task.isCompleted,
+        };
+        if (existingMap.containsKey(task.id)) {
+          duplicates.add(task.id);
+        }
+        existingMap[task.id] = jsonObj;
+      }
+
+      final mergedList = existingMap.values.toList();
+      final jsonString = JsonEncoder.withIndent('  ').convert(mergedList);
       await file.writeAsString(jsonString);
-      print('Saved ${tasks.length} tasks successfully');
+
+      if (duplicates.isNotEmpty) {
+        print('Saved ${tasks.length} tasks (merged). Duplicate ids updated: ${duplicates.join(', ')}');
+      } else {
+        print('Saved ${tasks.length} tasks successfully');
+      }
     } on FileSystemException catch (e) {
       throw StorageException('save', e.message);
     } on JsonUnsupportedObjectError catch (e) {

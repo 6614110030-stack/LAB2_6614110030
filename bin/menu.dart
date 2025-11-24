@@ -153,6 +153,29 @@ void _searchInteractive(TaskManager manager) {
 
 void _deleteInteractive(TaskManager manager) {
   print('\n--- 🗑️ ลบ Task ---');
+  print('เลือกการลบ: 1) ลบงาน  2) ลบไฟล์ที่เก็บ (JSON)');
+  final choice = _prompt('เลือก (1/2)', defaultValue: '1');
+  if (choice.trim() == '2') {
+    final path = _prompt('path ของไฟล์ที่จะลบ', defaultValue: 'tasks.json');
+    if (path.isEmpty) {
+      print('path ต้องไม่ว่าง');
+      return;
+    }
+    try {
+      final file = File(path);
+      if (!file.existsSync()) {
+        print('ไฟล์ไม่พบ: $path');
+        return;
+      }
+      file.deleteSync();
+      print('✅  ลบไฟล์สำเร็จ: $path');
+    } catch (e) {
+      print('ไม่สามารถลบไฟล์ได้: $e');
+    }
+    return;
+  }
+
+  // Default: delete task by id
   final id = _prompt('id ของงานที่จะลบ');
   if (id.isEmpty) {
     print('id ต้องไม่ว่าง');
@@ -185,6 +208,18 @@ Future<void> _loadInteractive(TaskManager manager, String path) async {
   print('\n--- 📂 Load Tasks ---');
   final p = _prompt('path', defaultValue: path);
   try {
+    final file = File(p);
+    if (!await file.exists()) {
+      print('ไฟล์ไม่พบ: $p');
+      return;
+    }
+
+    // อ่านและแสดงเนื้อหาไฟล์ทั้งหมดก่อนโหลด
+    final content = await file.readAsString();
+    print('\n--- Raw file content ---');
+    print(content);
+    print('--- End of file ---\n');
+
     await manager.loadFromFile(p);
     print('✅  โหลดไฟล์สำเร็จ: ${manager.allTasks.length} งาน');
   } on TaskException catch (e) {
